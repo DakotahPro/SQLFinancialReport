@@ -1,4 +1,4 @@
-USE [iERP90_Live]
+USE [database]
 GO
  ---Object  StoredProcedure [dbo].[YTD_Table]    Script Date 7252024 41250 PM 
 SET ANSI_NULLS ON
