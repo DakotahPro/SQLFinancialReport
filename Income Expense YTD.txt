@@ -1,4 +1,4 @@
-USE [iERP90_Live]
+USE [database]
 GO
 /****** Object:  StoredProcedure [dbo].[Income_Expense_YTD] ******/
 SET ANSI_NULLS ON
