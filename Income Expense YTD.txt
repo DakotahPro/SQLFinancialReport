@@ -1,0 +1,731 @@
+USE [iERP90_Live]
+GO
+/****** Object:  StoredProcedure [dbo].[Income_Expense_YTD] ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/*****************************************************************************************
+* Updated this script to be more modular for new report types.                           *
+* This was done by expecting more parameters to be passed from a starting file.          *
+* This file will pass the needed account numbers, year, and month so any location can    *
+* set up with a start up script and be passed to this script for YTD report.             *
+*****************************************************************************************/
+
+/*
+Table information:
+Displayed values that will be seen on the report
+
+Category: What the relative inforamtion in the row is refrencing
+YTD: the currently YTD for the category
+PCT1: percent diffrence of YTD
+BudgetPlan: Planned Budget for the category
+PCT2: Percent diffrence of Budgetplan and YTD
+Var1: variation of YTD - Budget
+VarPct1: percent diffrence of var1
+PriorYear: the prior year amount of the category
+Pct3: is prioryear * mutiplier / 100
+Var2: variation of YTD - Prioryear
+VarPct2: percent diffrence of var2
+
+Table config:
+configuring the report table
+
+MainGroup: Used for total line calculations
+SubGroup: Used for total line calculations
+SortOrder: The order which the row's will be displayed asc
+MakeBold: Bolds the Catagory on report display
+Multiplier: Multiply number
+Hide: Hide number
+Underline: places a single line under the numbers for this catagory
+DoubleUnderline: places a double line under the numbers for this catagory
+*/
+
+/****** Set up ******/
+ALTER proc [dbo].[sp_IncomeExpense_YTD]
+----Type 1 variables
+
+--Net Sales
+@Freight nvarchar(50) = NULL,
+@ExtraCharges nvarchar(50)= NULL,
+@InterSales nvarchar(50)= NULL,
+
+--Cost of Goods
+@Manufac nvarchar(50) = NULL,
+@InterCost nvarchar(50)= NULL,
+@OpExpense nvarchar(50) = NULL,
+@ManufacSupport nvarchar(50) = NULL,
+@Quality nvarchar(50) = NULL,
+@Marketing nvarchar(50) = NULL,
+@CostSales nvarchar(50) = NULL,
+@ProductDev nvarchar(50) = NULL,
+@GenralAdmin nvarchar(50) = NULL,
+@HR nvarchar(50) = NULL,
+@Safety nvarchar(50) = NULL,
+@Finance nvarchar(50) = NULL,
+@IT nvarchar(50) = NULL,
+@Engineer nvarchar(50) = NULL,
+
+--Operation Expenses
+@Interest nvarchar(50) = NULL,
+@GainLossAssets nvarchar(50) = NULL,
+@RoyaltyIncome nvarchar(50) = NULL,
+@RoyaltyExpense nvarchar(50) = NULL,
+@InterestExpense nvarchar(50) = NULL,
+@NonTaxIncome nvarchar(50) = NULL,
+@IncomeServices nvarchar(50) = NULL,
+@Subsidiary nvarchar(50) = NULL
+
+----Type 2 variables
+
+--Net Sales
+@AcctLabor nvarchar(50) = NULL,
+@AcctEquipRev nvarchar(50) = NULL,
+
+--Operation Expenses
+@AcctName nvarchar(50) = NULL,
+@AcctScrapIncome nvarchar(50) = NULL,
+@acctfixasset nvarchar(50) = NULL,
+
+----Both report type variables
+
+--Net Sales
+@GrossSales nvarchar(50) = NULL,
+@ReturnAllow nvarchar(50) = NULL,
+@ReportType nvarchar(50),
+
+--general
+@Year int,
+@Month int,
+@CreateTable bit = 1
+as
+Declare @Sales as Float
+Declare @BPlan as Float
+Declare @PYear as Float
+Declare @TCGS as float
+Declare @BPCGS as float
+Declare @TOE as float
+Declare @GrossProfit as float
+Declare @BudgetPlan as float
+Declare @BudgetPlanOE as float
+Declare @PriorYear as float
+Declare @Expenses as float
+Declare @PlanExpenses as float
+Declare @PriorExpenses as float
+Declare @EBIYTD as float
+Declare @EBIBudget as float
+Declare @EBIPrior as float
+Declare @RowNum as smallint
+Declare @ScrapIncome as float
+Declare @ScrapBudget as float
+Declare @ScrapPrior as float
+Declare @Earnings as float
+
+set @Sales = 0
+set @BPlan = 0
+set @TCGS = 0
+set @TOE = 0
+Set @RowNum = 1
+
+IF @CreateTable = 1
+Begin 
+select CAST('Revenues' as nvarchar(75)) as Category,
+	CAST(0 as money) as YTD,
+	CAST(0 as float) as PCT1,
+	CAST(0 as money) as BudgetPlan,
+	CAST(0 as float) as PCT2,
+	CAST(0 as money) as Var1,
+	CAST(0 as float) as VarPct1,
+	CAST(0 as money) as PriorYear,
+	CAST(0 as float) as Pct3,
+	CAST(0 as money) as Var2,
+	CAST(0 as float) as VarPct2,
+	CAST(1 as tinyint) as 'MainGroup',
+	CAST(1 as tinyint) as 'SubGroup',
+	@RowNum as SortOrder,
+	CAST(1 as bit) as MakeBold,
+	CAST(1 as smallint) as Multiplier,
+	CAST(0 as bit) as Hide,
+	CAST(0 as bit) as Underline,
+	CAST(0 as bit) as DoubleUnderline,
+	CAST(1 as bit) as HideLine
+into #TempTable
+Set @RowNum = @RowNum + 1
+End
+
+/****** Start of table output ******/
+
+/****** Net Sales ******/
+
+/*Gross Sales*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine  @Category=@GrossSales, --GrossSales
+	@Period = @Month, @Year = @Year, @MainGroup = 1, @Multiplier = -1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Gross Sales', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Returns & Allowances*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @ReturnAllow, --ReturnAllow
+	@Period = @Month, @Year = @Year, @MainGroup = 1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @Multiplier = -1,
+	@CatName = 'Returns & Allowances', @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Freight*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category=@Freight, --Freight
+	@Period = @Month, @Year = @Year, @MainGroup = 1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @Multiplier = -1,
+	@CatName = 'Freight', @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Extra Charges*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category=@ExtraCharges, --ExtraCharges
+	@Period = @Month, @Year = @Year, @MainGroup = 1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @Multiplier = -1,
+	@CatName = 'Extra Charges', @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Labor*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine  @Category=@AcctLabor, --AcctLabor
+	@Period = @Month, @Year = @Year, @MainGroup = 4, @Multiplier = -1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Labor', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Equipment Revenue*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine  @Category=@AcctEquipRev, --AcctEquipRev
+	@Period = @Month, @Year = @Year, @MainGroup = 4, @Multiplier = -1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Equipment Revenue', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Intercompany Sales*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDInterCompany @Category=@InterSales, --InterSales
+	@Period = @Month, @Year = @Year, @MainGroup = 4, @Multiplier = -1,
+	@SubGroup = 1, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Intercompany Sales', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Net Sales*/
+Insert Into #TempTable
+select 'Net Sales',
+	sum(YTD),
+	1 as PCT1,
+	sum(BudgetPlan),
+	1 as PCT2,
+	Sum(Var1),
+	1 as VarPct1,
+	Sum(PriorYear),
+	1 as Pct3,
+	Sum(Var2),
+	1 as VarPct2,
+	0,
+	1,
+	@RowNum,
+	0,
+	1,
+	1,
+	1,
+	0,
+	0
+from #TempTable
+Set @RowNum = @RowNum + 1
+
+Set @Sales = (Select YTD from #TempTable Where Category = 'Net Sales')
+Set @BPlan = (Select BudgetPlan from #TempTable Where Category = 'Net Sales')
+Set @PYear = (Select PriorYear from #TempTable Where Category = 'Net Sales')
+
+/*Spacer*/
+Insert into #TempTable
+exec sp_NullReturn @SortOrder = @RowNum, @CatName = 'Spacer'
+Set @RowNum = @RowNum + 1
+
+/****** Cost of goods ******/
+
+/*Mfg Overhead Absorbed*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @COGOverHead, --COGOverHead
+	@Period = @Month, @Year = @Year, @MainGroup = 2,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Mfg Overhead Absorbed', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Manufacturing Expenses*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Manufac, --Manufac
+	@Period = @Month, @Year = @Year, @MainGroup = 2,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Manufacturing Expenses', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Intercompany Cost*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDInterCompany @Category= @InterCost, --InterCost
+	@Period = @Month, @Year = @Year, @MainGroup = 2,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Intercompany Cost', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Total Cost of Sales if statment*/
+Insert Into #TempTable
+	select 'Total Cost of Goods Sold',
+		sum(YTD),
+		COALESCE(sum(YTD)/(select NULLIF(ytd,0) from #TempTable where category = 'Net Sales'),0) as PCT1,
+		sum(BudgetPlan),
+		sum(BudgetPlan)/(select NULLIF(BudgetPlan,0) from #TempTable where category = 'Net Sales') as PCT2,
+		Sum(Var1),
+		Sum(Var1)/Sum(BudgetPlan) as VarPct1,
+		Sum(PriorYear),
+		sum(PriorYear)/(select NULLIF(PriorYear,0) from #TempTable where category = 'Net Sales')  as Pct3,
+		Sum(Var2),
+		Sum(Var2)/Sum(NULLIF(PriorYear,0)) as VarPct2,
+		0,
+		2,
+		@RowNum,
+		0,
+		1,
+		0,
+		1,
+		0,
+		0
+	from #TempTable
+	WHERE Subgroup = 2
+Set @RowNum = @RowNum + 1
+
+/*Spacer*/
+Insert into #TempTable
+exec sp_NullReturn @SortOrder = @RowNum, @CatName = 'Spacer'
+Set @RowNum = @RowNum + 1
+
+/*Gross Profit if statment*/
+Insert Into #TempTable
+	select 'Gross Profit',
+		-sum(YTD*Multiplier),
+		COALESCE(-sum(YTD*Multiplier)/(select NULLIF(ytd,0) from #TempTable where category = 'Net Sales'),0) as PCT1,
+		-sum(BudgetPlan*Multiplier),
+		-sum(BudgetPlan*Multiplier)/(select NULLIF(BudgetPlan,0) from #TempTable where category = 'Net Sales') as PCT2,
+		Sum(Var1),
+		Sum(Var1)/Sum(BudgetPlan) as VarPct1,
+		-sum(PriorYear*Multiplier),
+		-sum(PriorYear*Multiplier)/(select NULLIF(PriorYear,0) from #TempTable where category = 'Net Sales')  as Pct3,
+		Sum(Var2),
+		Sum(Var2)/Sum(NULLIF(PriorYear,0)) as VarPct2,
+		2,
+		2,
+		@RowNum,
+		1,
+		-1,
+		0,
+		1,
+		0,
+		0
+	from #TempTable
+	WHERE MainGroup != 0
+Set @RowNum = @RowNum + 1
+
+Set @GrossProfit = (SELECT NULLIF(YTD,0) FROM #TempTable WHERE Category = 'Gross Profit')
+Set @BudgetPlan = (SELECT NULLIF(BudgetPlan,0) FROM #TempTable WHERE Category = 'Gross Profit')
+Set @Prioryear = (SELECT NULLIF(PriorYear,0) FROM #TempTable WHERE Category = 'Gross Profit')
+
+/*Spacer*/
+Insert into #TempTable
+exec sp_NullReturn @SortOrder = @RowNum, @CatName = 'Spacer'
+Set @RowNum = @RowNum + 1
+
+/****** Operation Expenses ******/
+
+/*Manufacturing Support*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @ManufacSupport, --ManufacSupport
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Manufacturing Support', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Quality*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Quality, --Quality
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Quality', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Marketing*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Marketing, --Marketing
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Marketing', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Sales*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @CostSales, --CostSales
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Sales', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Product Development*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @ProductDev, --ProductDev
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Product Development', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*General & Administrative*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @GenralAdmin, --GenralAdmin
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'General & Administrative', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Human Resources*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @HR, --HR
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Human Resources', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Safety*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Safety, --Safety
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Safety', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Finance*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Finance, --Finance
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Finance', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Information Technology*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @IT, --IT
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Information Technology', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Engineering*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Engineer, --Engineer
+	@Period = @Month, @Year = @Year, @MainGroup = 3,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Engineering', @PriorYear = @PYear
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+Set @BudgetPlanOE = (SELECT BudgetPlan FROM #TempTable WHERE Category = @AcctName)
+
+/*Total Operating Expenses*/
+Insert Into #TempTable
+select 'Total Operating Expenses',
+	sum(YTD*Multiplier),
+	COALESCE(sum(YTD*Multiplier)/(select NULLIF(YTD,0) from #TempTable where category = 'Net Sales'),0) as PCT1,
+	sum(BudgetPlan*Multiplier),
+	sum(BudgetPlan*Multiplier)/(select NULLIF(BudgetPlan,0) from #TempTable where category = 'Net Sales') as PCT2,
+	Sum(Var1),
+	1 as VarPct1,
+	sum(PriorYear*Multiplier),
+	sum(Pct3*Multiplier)  as Pct3,
+	Sum(Var2),
+	1 as VarPct2,
+	2,
+	2,
+	@RowNum,
+	1,
+	-1,
+	0,
+	1,
+	0,
+	0
+from #TempTable
+WHERE MainGroup = 3
+Set @RowNum = @RowNum + 1
+
+Set @TOE = (Select YTD from #TempTable Where Category = 'Total Operating Expenses')
+
+/*Spacer*/
+Insert into #TempTable
+exec sp_NullReturn @SortOrder = @RowNum, @CatName = 'Spacer'
+Set @RowNum = @RowNum + 1
+
+/*Earnings Before Interest*/
+Insert Into #TempTable
+select 'Earnings Before Interest',
+	@GrossProfit - sum(YTD*Multiplier),
+	COALESCE((@GrossProfit - sum(YTD*Multiplier))/(select NULLIF(ytd,0) from #TempTable where category = 'Net Sales'),0) as PCT1,
+	@BudgetPlan - sum(BudgetPlan*Multiplier),
+	(@BudgetPlan - sum(BudgetPlan*Multiplier))/(select NULLIF(BudgetPlan,0) from #TempTable where category = 'Net Sales') as PCT2,
+	1 as Var1,
+	Sum(Var1)/100 as VarPct1,
+	@PriorYear - sum(PriorYear*Multiplier),
+	NULLIF((select NULLIF(Pct3,0) from #TempTable where category = 'Gross Profit') - (select NULLIF(PCT3,0) from #TempTable where category = 'Total Operating Expenses'),0) as Pct3,
+	1 as Var2,
+	Sum(Var2)/100 as VarPct2,
+	5,
+	2,
+	@RowNum,
+	1,
+	-1,
+	0,
+	0,
+	0,
+	0
+from #TempTable
+WHERE MainGroup = 3
+Set @RowNum = @RowNum + 1
+
+/****** Net Income ******/
+
+/*Scrap Income*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category=@AcctScrapIncome, --AcctScrapIncome
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Scrap Income', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+Set @ScrapIncome = (Select YTD from #TempTable where Category = 'Scrap Income')
+Set @ScrapBudget = (Select BudgetPlan from #TempTable where Category = 'Scrap Income')
+Set @ScrapPrior = (Select PriorYear from #TempTable where Category = 'Scrap Income')
+
+/*Sales of Fixed Asset*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category=@acctfixasset, --acctfixasset
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Sale of Fixed Asset', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+Set @Expenses = (SELECT YTD FROM #TempTable WHERE Category = 'Sale of Fixed Asset')
+Set @PlanExpenses = (SELECT BudgetPlan FROM #TempTable WHERE Category = 'Sale of Fixed Asset')
+Set @PriorExpenses = (SELECT PriorYear FROM #TempTable WHERE Category = 'Sale of Fixed Asset')
+
+/*Interest Income*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Interest, --Interest
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Interest Income', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Sale of Fixed Assets*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @GainLossAssets, --GainLossAssets
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Sale of Fixed Assets', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Royalty/Licensing Income*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @RoyaltyIncome, --RoyaltyIncome
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Royalty/Licensing Income', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Royalty/Licensing Expense*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @RoyaltyExpense, --RoyaltyExpense
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Royalty/Licensing Expense', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Interest Expense*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @InterestExpense, --InterestExpense
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Interest Expense', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Non-Taxable Income*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @NonTaxIncome, --NonTaxIncome
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Non-Taxable Income', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Income/Exp-Services*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @IncomeServices, --IncomeServices
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Income/Exp-Services', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Income (Loss) from Subsidiary*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @Subsidiary, --Subsidiary
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Income (Loss) from Subsidiary', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Scrap Income - Lincoln, NE*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @ScrapLincoln, --ScrapLincoln
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Scrap Income - Lincoln, NE', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Scrap Income - Lexington, SC*/
+Insert into #TempTable
+exec sp_GetIncomeExpense_YTDLine @Category= @ScrapLexington, --ScrapLexington
+	@Period = @Month, @Year = @Year, @MainGroup = 5, @Multiplier = -1,
+	@SubGroup = 2, @SortOrder = @RowNum, @MakeBold = 0, @NetSales = @Sales,
+	@BudgetPlan = @BPlan, @CatName = 'Scrap Income - Lexington, SC', @PriorYear = @PYear, @underline = 0
+	, @ReportType = @ReportType
+Set @RowNum = @RowNum + 1
+
+/*Spacer*/
+Insert into #TempTable
+exec sp_NullReturn @SortOrder = @RowNum, @CatName = 'Spacer'
+Set @RowNum = @RowNum + 1
+
+/*Net Income if statment*/
+Insert Into #TempTable
+select 'Net Income (Loss)',
+	sum(YTD),
+	COALESCE(sum(YTD)/(select NULLIF(ytd,0) from #TempTable where category = 'Net Sales'),0) as PCT1,
+	sum(BudgetPlan),
+	sum(BudgetPlan)/(select NULLIF(BudgetPlan,0) from #TempTable where category = 'Net Sales') as PCT2,
+	Sum(Var1),
+	Sum(Var1)/Sum(NULLIF(BudgetPlan,0)) as VarPct1,
+	sum(PriorYear),
+	sum(PriorYear)/(select NULLIF(PriorYear,0) from #TempTable where category = 'Net Sales')  as Pct3,
+	Sum(Var2),
+	Sum(Var2)/Sum(NULLIF(PriorYear,0)) as VarPct2,
+	2,
+	2,
+	@RowNum,
+	1,
+	-1,
+	0,
+	1,
+	1,
+	0
+from #TempTable
+WHERE MainGroup = 5
+
+/****** Updates ******/
+/*Intercompany transations should ONLY show information on the YTD and Prior year columns*/
+update #TempTable
+set Var2 =
+CASE when PriorYear is NULL
+	THEN YTD
+WHEN Category in ('Intercompany Sales','Intercompany Cost')
+	THEN 0
+ELSE
+	YTD - PriorYear
+END,
+
+var1 = 
+CASE when PriorYear is NULL
+	THEN YTD
+WHEN Category in ('Intercompany Sales','Intercompany Cost')
+	THEN 0
+ELSE
+	YTD - BudgetPlan
+END
+
+/*Update statements need to be seporated so the var's in the first update statment can be used for varpct's in the second statement*/
+update #TempTable
+/*Update both Varpct if there is a prior year, by default assumes there is no prior year*/
+set varpct1 = 
+CASE WHEN BudgetPlan = 0
+THEN 
+	CASE WHEN var1 !=0
+		THEN 0
+		ELSE 1
+	END
+WHEN Category in ('Intercompany Sales','Intercompany Cost')
+	THEN 0
+ELSE
+	Var1/BudgetPlan
+End,
+
+varpct2 = 
+CASE WHEN PriorYear = 0
+THEN
+	CASE WHEN var1 !=0
+		THEN 0
+		ELSE 1
+	END
+WHEN Category in ('Intercompany Sales','Intercompany Cost')
+	THEN 0
+ELSE
+	Var2/PriorYear
+End,
+
+/*Clean up statements*/
+pct3 =
+CASE WHEN pct3 is NULL
+	Then 0
+ELSE
+	pct3
+END
+
+/*delete statment to take null entries out besides spacers*/
+DELETE FROM #TempTable
+/*YTD or PriorYear must have something in them to be shown*/
+WHERE
+	((YTD = 0 or YTD is NULL) and (PriorYear = 0 or PriorYear is NULL))
+	and (Category not like "%Spacer%")
+
+/*create final table*/
+IF @CreateTable = 1
+Begin
+	select * from #TempTable
+	order by sortorder
+	drop table #TempTable
+End

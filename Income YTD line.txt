@@ -1,0 +1,97 @@
+USE [iERP90_Live]
+GO
+/****** Object:  StoredProcedure [dbo].[GetIncomeExpense_YTDLine]    Script Date: 7/25/2024 4:08:22 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+--documentation is limited on this sp, most var's are select statments pulling data (like with YTD or BudgetPlan) or pulling data then calculating it (like PCT1 or PCT2)
+
+ALTER proc [dbo].[GetIncomeExpense_YTDLine] @Category nvarchar(50)
+											,@Category2 nvarchar(50) = null
+											,@Category3 nvarchar(50) = null
+											,@Category4 nvarchar(50) = null
+											,@Period int
+											,@Year int
+											,@MainGroup smallint
+											,@SubGroup smallint
+											,@SortOrder smallint
+											,@MakeBold bit=0
+											,@NetSales float = 0
+											,@BudgetPlan float = 0
+											,@Multiplier smallint = 1
+											,@CatName nvarchar(75)
+											,@Hide bit=0
+											,@Underline bit=0
+											,@DoubleUnderline bit=0
+											,@HideLine bit=0
+											,@PriorYear float=0
+											,@ReportType nvarchar(50)
+as
+select @CatName as Category,
+sum(GLD.GLD_DebitAmt - GLD.GLD_CreditAmt)*@Multiplier AS YTD,
+COALESCE(sum(GLD.GLD_DebitAmt - GLD.GLD_CreditAmt)*@Multiplier / NULLIF(@NetSales,0),0) as PCT1,
+--Used to find how far into the year the report is
+(SELECT COALESCE(SUM(
+CASE 
+	WHEN @Period = 1 then (budgetJan)
+	WHEN @Period = 2 then (budgetJan + budgetFeb)
+	WHEN @Period = 3 then (budgetJan + budgetFeb + budgetMar)
+	WHEN @Period = 4 then (budgetJan + budgetFeb + budgetMar + budgetApr)
+	WHEN @Period = 5 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay)
+	WHEN @Period = 6 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun)
+	WHEN @Period = 7 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul)
+	WHEN @Period = 8 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug)
+	WHEN @Period = 9 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep)
+	WHEN @Period = 10 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct)
+	WHEN @Period = 11 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct + budgetNov)
+	WHEN @Period = 12 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct + budgetNov + budgetDec)
+End)*@Multiplier,0) FROM Gray_Budget
+inner join coa on coa_acctnbr = budgetAcctNum
+--Checks report type and looks for just the data needed
+where budgetYear = @Year and ((@ReportType like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)) and not (COA_Description like '%type2%' and coa_type in ('Revenue','COGS'))) or (@ReportType not like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4))))) as BudgetPlan,
+--repeat from above
+COALESCE((SELECT COALESCE(SUM(
+CASE 
+	WHEN @Period = 1 then (budgetJan)
+	WHEN @Period = 2 then (budgetJan + budgetFeb)
+	WHEN @Period = 3 then (budgetJan + budgetFeb + budgetMar)
+	WHEN @Period = 4 then (budgetJan + budgetFeb + budgetMar + budgetApr)
+	WHEN @Period = 5 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay)
+	WHEN @Period = 6 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun)
+	WHEN @Period = 7 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul)
+	WHEN @Period = 8 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug)
+	WHEN @Period = 9 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep)
+	WHEN @Period = 10 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct)
+	WHEN @Period = 11 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct + budgetNov)
+	WHEN @Period = 12 then (budgetJan + budgetFeb + budgetMar + budgetApr + budgetMay + budgetJun + budgetJul + budgetAug + budgetSep + budgetOct + budgetNov + budgetDec)
+End)*@Multiplier,0) FROM Budget
+inner join coa on coa_acctnbr = budgetAcctNum
+where budgetYear = @Year and ((@ReportType like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)) and not (COA_Description like '%type2%' and coa_type in ('Revenue','COGS'))) or (@ReportType not like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4))))) / NULLIF(@BudgetPlan,0),0) as PCT2,
+0 as Var1,
+100 as VarPct1,
+
+(Select sum(GLD.GLD_DebitAmt - GLD.GLD_CreditAmt)*@Multiplier from gld
+inner join coa on GLD_AcctNbr = COA_AcctNbr
+where gld_period <=@Period and gld_year = @year - 1 and ((@ReportType like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)) and not (COA_Description like '%type2%' and coa_type in ('Revenue','COGS'))) or (@ReportType not like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)))))
+as PriorYear,
+
+COALESCE((Select sum(GLD.GLD_DebitAmt - GLD.GLD_CreditAmt)*@Multiplier from gld
+inner join coa on GLD_AcctNbr = COA_AcctNbr
+where gld_period <=@Period and gld_year = @year - 1 and ((@ReportType like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)) and not (COA_Description like '%type2%' and coa_type in ('Revenue','COGS'))) or (@ReportType not like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4))))) / NULLIF(@PriorYear,0),0)
+as PCT3,
+0 as Var2,
+1 as VarPct2,
+@MainGroup,
+@SubGroup,
+@SortOrder,
+@MakeBold,
+@Multiplier,
+@Hide,
+@Underline,
+@DoubleUnderline,
+@HideLine
+from gld
+inner join coa on GLD_AcctNbr = COA_AcctNbr
+where gld_period <=@Period and gld_year = @Year and ((@ReportType like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4)) and not (COA_Description like '%type2%' and coa_type in ('Revenue','COGS'))) or (@ReportType not like '%type1%' and (Coa_AcctNbr = @Category or Coa_group in (@Category, @Category2, @Category3, @Category4))))

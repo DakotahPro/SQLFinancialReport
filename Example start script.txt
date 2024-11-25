@@ -1,0 +1,102 @@
+USE [iERP90_Live]
+GO
+ ---Object  StoredProcedure [dbo].[YTD_Table]    Script Date 7252024 41250 PM 
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+ Set up 
+ALTER proc [dbo].[YTD_Table]
+@Year int,
+@Month int
+as
+
+---Declare's
+Declare @ReportType nvarchar(50)
+
+Declare @GrossSales nvarchar(50)
+Declare @ReturnAllow nvarchar(50)
+Declare @Freight nvarchar(50)
+Declare @ExtraCharges nvarchar(50)
+
+Declare @OpExpense nvarchar(50)
+Declare @ManufacSupport nvarchar(50)
+Declare @Quality nvarchar(50)
+Declare @Marketing nvarchar(50)
+Declare @CostSales nvarchar(50)
+Declare @ProductDev nvarchar(50)
+Declare @GenralAdmin nvarchar(50)
+Declare @HR nvarchar(50)
+Declare @Safety nvarchar(50)
+Declare @Finance nvarchar(50)
+Declare @IT nvarchar(50)
+Declare @Engineer nvarchar(50)
+
+Declare @Interest nvarchar(50)
+Declare @GainLossAssets nvarchar(50)
+Declare @RoyaltyIncome nvarchar(50) 
+Declare @RoyaltyExpense nvarchar(50)
+Declare @InterestExpense nvarchar(50)
+Declare @NonTaxIncome nvarchar(50)
+Declare @IncomeServices nvarchar(50)
+Declare @Subsidiary nvarchar(50)
+
+---set's
+set @ReportType = 'location 1'
+
+set @GrossSales = 'Gross Sales'
+set @ReturnAllow='Returns & Allowances'
+set @Freight='Freight'
+set @ExtraCharges='Extra Charges'
+
+set @Manufac='Manufacturing'
+set @ManufacSupport='Manufacturing Support'
+set @Quality='Quality'
+set @Marketing='Marketing'
+set @CostSales='Sales'
+set @ProductDev='Product Development'
+set @GenralAdmin='General & Administrative'
+set @HR='Human Resources'
+set @Safety='Safety'
+set @Finance='Finance'
+set @IT='Information Technology'
+set @Engineer='Engineering'
+
+set @Interest='Interest Income'
+set @GainLossAssets='GainLoss on Assets'
+set @RoyaltyIncome='Royalty Income'
+set @RoyaltyExpense='Royalty Expense'
+set @InterestExpense='Interest Expense'
+set @NonTaxIncome='NoneTax Income'
+set @IncomeServices='Service Income'
+set @Subsidiary='Subsidiary'
+
+Exec Income_Expense_YTD
+@GrossSales = @GrossSales,
+@ReturnAllow = @ReturnAllow,
+@Freight = @Freight,
+@ExtraCharges = @ExtraCharges,
+@Manufac = @Manufac,
+@ManufacSupport = @ManufacSupport,
+@Quality = @Quality,
+@Marketing = @Marketing,
+@CostSales = @CostSales,
+@ProductDev = @ProductDev,
+@GenralAdmin = @GenralAdmin,
+@HR = @HR,
+@Safety = @Safety,
+@Finance = @Finance,
+@IT = @IT,
+@Engineer = @Engineer,
+@Interest = @Interest,
+@GainLossAssets = @GainLossAssets,
+@RoyaltyIncome = @RoyaltyIncome,
+@RoyaltyExpense = @RoyaltyExpense,
+@InterestExpense = @InterestExpense,
+@NonTaxIncome = @NonTaxIncome,
+@IncomeServices = @IncomeServices,
+@Subsidiary = @Subsidiary,
+@ReportType = @ReportType,
+@Year = @Year,
+@Month = @Month
