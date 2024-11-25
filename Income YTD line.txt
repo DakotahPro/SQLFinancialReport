@@ -1,4 +1,4 @@
-USE [iERP90_Live]
+USE [database]
 GO
 /****** Object:  StoredProcedure [dbo].[GetIncomeExpense_YTDLine]    Script Date: 7/25/2024 4:08:22 PM ******/
 SET ANSI_NULLS ON
